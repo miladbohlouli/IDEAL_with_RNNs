@@ -11,6 +11,7 @@ hidden_dims = 64
 batch_size = 64
 predict_seq_len = 70
 train_seq_len = 30
+stride = 100
 seq_len = 30
 seq_stride = 1
 lstm_hidden = 16
@@ -21,13 +22,27 @@ def train():
     train_dataset = IDEAL_RNN(
         seq_length=seq_len,
         multi_room_training=True,
-        stride=100
+        stride=stride
+    )
+
+    test_dataset = IDEAL_RNN(
+        seq_length=seq_len,
+        multi_room_training=True,
+        train=False,
+        stride=stride
     )
 
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size
     )
+
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size
+    )
+
+    # print(next(iter(train_loader)).shape)
 
     input_size = train_dataset[0].shape[-1]
 
