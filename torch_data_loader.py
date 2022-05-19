@@ -42,6 +42,7 @@ class IDEAL_RNN(Dataset):
         rnn_dataset_metdata = home_sensors.loc[home_sensors["type"].isin(chosen_sensors), ["roomid", "sensorid", "type"]].sort_values("roomid")
 
         room_dataset = {}
+        room_mean_std = {}
         if multi_room_training:
             for room_id in rnn_dataset_metdata["roomid"].unique():
                 sensor_ids = rnn_dataset_metdata[rnn_dataset_metdata["roomid"] == room_id]["sensorid"]
@@ -58,11 +59,17 @@ class IDEAL_RNN(Dataset):
         dataset = []
         for key, value in room_dataset.items():
             temp_ds = [val['readings'].to_numpy()[:, None] for val in value]
+            mean = np.mean(temp_ds, axis=0)
+            std = np.std(temp_ds, axis=0)
+            temp_ds = (temp_ds - mean) / std
             dataset.append(np.concatenate(temp_ds, axis=1))
+            room_mean_std[key] = (mean, std)
 
         self.rnn_dataset = []
         for ds in dataset:
             self.rnn_dataset += [np.array(ds[i:i+seq_length]) for i in range(0, len(ds)-seq_length, stride)]
+
+        self.rnn_dataset = np.asarray(self.rnn_dataset, dtype=np.float)
 
     def __getitem__(self, idx):
         return self.rnn_dataset[idx]
