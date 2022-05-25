@@ -48,7 +48,7 @@ class IDEAL_RNN(Dataset):
         rnn_dataset_metdata = home_sensors.loc[home_sensors["type"].isin(chosen_sensors), ["roomid", "sensorid", "type"]].sort_values("roomid")
 
         room_pure_dataset = {}
-        room_mean_std = {}
+        self.room_mean_std = {}
         if multi_room_training:
             for room_id in rnn_dataset_metdata["roomid"].unique():
                 sensor_ids = rnn_dataset_metdata[rnn_dataset_metdata["roomid"] == room_id]["sensorid"]
@@ -74,59 +74,67 @@ class IDEAL_RNN(Dataset):
             dates = np.concatenate(dates, axis=1)
 
             data_len = len(temp_ds)
+            np.random.seed(10)
             indexes = list(range(data_len))
-            # np.random.seed(10)
-            # if shuffle: np.random.shuffle(indexes)
+
             train_indexes = indexes[:int(data_len * self.train_split)]
-            mean = np.mean(temp_ds[train_indexes], axis=0)
-            std = np.std(temp_ds[train_indexes], axis=0)
-            temp_ds = (temp_ds - mean) / std
-            room_mean_std[key] = (mean, std)
-
-            train_dataset.append(
-                IDEAL_RNN.__make_sequence(
-                    temp_ds[train_indexes],
-                    self.seq_length,
-                    self.stride
-                ))
-
-            train_dataset_timesteps.append(
-                IDEAL_RNN.__make_sequence(
-                    dates[train_indexes],
-                    self.seq_length,
-                    self.stride
-                ))
+            train_dataset.append(temp_ds[train_indexes])
+            train_dataset_timesteps.append(dates[train_indexes])
 
             test_indexes = list(range(data_len))[int(data_len * self.train_split):]
-            test_dataset.append(
-                IDEAL_RNN.__make_sequence(
-                    temp_ds[test_indexes],
-                    self.seq_length,
-                    self.stride
-                ))
+            test_dataset.append(temp_ds[test_indexes])
+            test_dataset_timesteps.append(dates[test_indexes])
 
-            test_dataset_timesteps.append(
-                IDEAL_RNN.__make_sequence(
-                    dates[test_indexes],
-                    self.seq_length,
-                    self.stride
-                ))
+        train_dataset = np.concatenate(train_dataset, axis=0)
+        mean, std = train_dataset.mean(), train_dataset.std()
+        self.room_mean_std = (mean, std)
+        train_dataset = (train_dataset - mean) / std
+        train_dates = np.concatenate(train_dataset_timesteps, axis=0)
 
-        self.train_dataset = np.concatenate(train_dataset, axis=0)
-        self.train_dates = np.concatenate(train_dataset_timesteps, axis=0)
-        self.test_dataset = np.concatenate(test_dataset, axis=0)
-        self.test_dates = np.concatenate(test_dataset_timesteps, axis=0)
+        test_dataset = np.concatenate(test_dataset, axis=0)
+        test_dataset = (test_dataset - mean) / std
+        test_dates = np.concatenate(test_dataset_timesteps, axis=0)
+
+        self.train_dataset = IDEAL_RNN.__make_sequence(
+            train_dataset,
+            seq_len=seq_length,
+            stride=stride
+        )
+
+        self.train_dates = IDEAL_RNN.__make_sequence(
+            train_dates,
+            seq_len=seq_length,
+            stride=stride
+        )
+
+        if shuffle:
+            indexes = list(range(len(self.train_dataset)))
+            np.random.shuffle(indexes)
+            self.train_dataset = self.train_dataset[indexes]
+            self.train_dates = self.train_dates[indexes]
+
+        self.test_dataset = IDEAL_RNN.__make_sequence(
+            test_dataset,
+            seq_len=seq_length,
+            stride=stride
+        )
+
+        self.test_dates = IDEAL_RNN.__make_sequence(
+            test_dates,
+            seq_len=seq_length,
+            stride=stride
+        )
 
 
     @staticmethod
     def __make_sequence(data, seq_len, stride):
-        return [np.array(data[i:i+seq_len]) for i in range(0, len(data)-seq_len, stride)]
+        return np.array([np.array(data[i:i+seq_len]) for i in range(0, len(data)-seq_len, stride)])
 
     def __getitem__(self, idx):
         if self.train:
-            return (self.train_dataset[idx], self.train_dates[idx])
+            return self.train_dataset[idx], self.train_dates[idx]
         elif not self.train:
-            return (self.test_dataset[idx], self.test_dates[idx])
+            return self.test_dataset[idx], self.test_dates[idx]
 
     def __len__(self):
         if self.train:
@@ -134,6 +142,9 @@ class IDEAL_RNN(Dataset):
         elif not self.train:
             return len(self.test_dataset)
 
+
+    def rescale(self, data):
+        return (data * self.room_mean_std[1]) + self.room_mean_std[0]
 
 if __name__ == '__main__':
     id = IDEAL_RNN()
