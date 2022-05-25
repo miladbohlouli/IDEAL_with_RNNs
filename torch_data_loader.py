@@ -38,7 +38,7 @@ class IDEAL_RNN(Dataset):
         home_id = np.random.choice(home_ids)
         room_ids = mdi.metadata["rooms"][mdi.metadata["rooms"]["homeid"] == home_id]["roomid"].to_numpy()
         home_sensors = mdi.metadata["sensors"][mdi.metadata["sensors"]["roomid"].isin(room_ids)]
-        chosen_sensors = ["humidity", "temperature", "light"]
+        chosen_sensors = ["temperature"]
         print("home_id: ", home_id)
         print("room_ids: ", room_ids)
         print("available sensor types: ", home_sensors["type"].unique())
@@ -63,25 +63,36 @@ class IDEAL_RNN(Dataset):
             raise Exception(f"There are no valid files for the home_id: {home_id}")
 
         train_dataset = []
+        train_dataset_timesteps = []
         test_dataset = []
-        room_dataset = {}
+        test_dataset_timesteps = []
         for key, value in room_pure_dataset.items():
             temp_ds = [val['readings'].to_numpy()[:, None] for val in value]
-            room_dataset[key] = np.concatenate(temp_ds, axis=1)
+            dates = [val['readings'].index.to_numpy()[:, None] for val in value]
 
-            data_len = len(room_dataset[key])
+            temp_ds = np.concatenate(temp_ds, axis=1)
+            dates = np.concatenate(dates, axis=1)
+
+            data_len = len(temp_ds)
             indexes = list(range(data_len))
-            np.random.seed(10)
-            if shuffle: np.random.shuffle(indexes)
+            # np.random.seed(10)
+            # if shuffle: np.random.shuffle(indexes)
             train_indexes = indexes[:int(data_len * self.train_split)]
-            mean = np.mean(room_dataset[key][train_indexes], axis=0)
-            std = np.std(room_dataset[key][train_indexes], axis=0)
-            room_dataset[key] = (room_dataset[key] - mean) / std
+            mean = np.mean(temp_ds[train_indexes], axis=0)
+            std = np.std(temp_ds[train_indexes], axis=0)
+            temp_ds = (temp_ds - mean) / std
             room_mean_std[key] = (mean, std)
 
             train_dataset.append(
                 IDEAL_RNN.__make_sequence(
-                    room_dataset[key][train_indexes],
+                    temp_ds[train_indexes],
+                    self.seq_length,
+                    self.stride
+                ))
+
+            train_dataset_timesteps.append(
+                IDEAL_RNN.__make_sequence(
+                    dates[train_indexes],
                     self.seq_length,
                     self.stride
                 ))
@@ -89,13 +100,22 @@ class IDEAL_RNN(Dataset):
             test_indexes = list(range(data_len))[int(data_len * self.train_split):]
             test_dataset.append(
                 IDEAL_RNN.__make_sequence(
-                    room_dataset[key][test_indexes],
+                    temp_ds[test_indexes],
+                    self.seq_length,
+                    self.stride
+                ))
+
+            test_dataset_timesteps.append(
+                IDEAL_RNN.__make_sequence(
+                    dates[test_indexes],
                     self.seq_length,
                     self.stride
                 ))
 
         self.train_dataset = np.concatenate(train_dataset, axis=0)
+        self.train_dates = np.concatenate(train_dataset_timesteps, axis=0)
         self.test_dataset = np.concatenate(test_dataset, axis=0)
+        self.test_dates = np.concatenate(test_dataset_timesteps, axis=0)
 
 
     @staticmethod
@@ -104,9 +124,9 @@ class IDEAL_RNN(Dataset):
 
     def __getitem__(self, idx):
         if self.train:
-            return self.train_dataset[idx]
+            return (self.train_dataset[idx], self.train_dates[idx])
         elif not self.train:
-            return self.test_dataset[idx]
+            return (self.test_dataset[idx], self.test_dates[idx])
 
     def __len__(self):
         if self.train:
