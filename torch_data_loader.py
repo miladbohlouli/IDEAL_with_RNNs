@@ -14,8 +14,9 @@ class IDEAL_RNN(Dataset):
     def __init__(self,
                  data_path="dataset",
                  seed=20,
+                 sampling_rate=40,
                  multi_room_training=True,
-                 seq_length=100,
+                 seq_length=30,
                  shuffle=True,
                  train=True,
                  train_split=0.8,
@@ -28,6 +29,7 @@ class IDEAL_RNN(Dataset):
         self.stride = stride
         self.train_split = train_split
         self.train = train
+        self.sampling_rate = sampling_rate
 
         # initialize the metadata interface
         mdi = IdealMetadataInterface(metadata_path)
@@ -57,7 +59,6 @@ class IDEAL_RNN(Dataset):
                 temp_data += appliance.get(sensorid=sensor_ids)
                 if temp_data.__len__() != 0:
                     room_pure_dataset[room_id] = temp_data
-                    break
 
         if room_pure_dataset.keys().__len__() == 0:
             raise Exception(f"There are no valid files for the home_id: {home_id}")
@@ -71,6 +72,7 @@ class IDEAL_RNN(Dataset):
             dates = [val['readings'].index.to_numpy()[:, None] for val in value]
 
             temp_ds = np.concatenate(temp_ds, axis=1)
+            temp_ds = self.__sample(temp_ds)
             dates = np.concatenate(dates, axis=1)
 
             data_len = len(temp_ds)
@@ -126,9 +128,8 @@ class IDEAL_RNN(Dataset):
         )
 
 
-    @staticmethod
-    def __make_sequence(data, seq_len, stride):
-        return np.array([np.array(data[i:i+seq_len]) for i in range(0, len(data)-seq_len, stride)])
+    def rescale(self, data):
+        return (data * self.room_mean_std[1]) + self.room_mean_std[0]
 
     def __getitem__(self, idx):
         if self.train:
@@ -142,9 +143,16 @@ class IDEAL_RNN(Dataset):
         elif not self.train:
             return len(self.test_dataset)
 
+    def __sample(self, data):
+        data_len = len(data)
+        indexes = np.array(list(range(data_len)))
+        return data[indexes % 10 == 0]
 
-    def rescale(self, data):
-        return (data * self.room_mean_std[1]) + self.room_mean_std[0]
+
+
+    @staticmethod
+    def __make_sequence(data, seq_len, stride):
+        return np.array([np.array(data[i:i + seq_len]) for i in range(0, len(data) - seq_len, stride)])
 
 if __name__ == '__main__':
     id = IDEAL_RNN()
