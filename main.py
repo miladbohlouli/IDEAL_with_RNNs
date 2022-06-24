@@ -17,7 +17,7 @@ import shutil
 import pickle as pk
 import argparse
 
-arg_params = argparse.ArgumentParser()
+
 
 global line
 line = 20*"*"
@@ -37,25 +37,23 @@ def train_evaluate(
                                               format='%(asctime)s %(filename)s %(levelname)s: %(message)s',
                                               level=logging.INFO)
 
+    logging.info("Preparing the train loaders...")
     train_dataset = IDEAL_RNN(
-        seq_length=params["total_seq_len"],
-        sampling_rate=params["sampling_rate"],
         multi_room_training=True,
-        stride=params["stride"],
-    )
-
-    test_dataset = IDEAL_RNN(
-        seq_length=params["total_seq_len"],
-        sampling_rate=params["sampling_rate"],
-        multi_room_training=True,
-        train=False,
-        stride=params["stride"]
+        params=params
     )
 
     train_loader = DataLoader(
         train_dataset,
         collate_fn=custom_collate,
         batch_size=params["batch_size"]
+    )
+
+    logging.info("Preparing the test loaders...")
+    test_dataset = IDEAL_RNN(
+        multi_room_training=True,
+        train=False,
+        params=params
     )
 
     test_loader = DataLoader(
@@ -161,11 +159,13 @@ def train_evaluate(
             torch.save(model_saving_dict, os.path.join(save_dir, args.tag + "-checkpoint-" + str(i)))
 
 
-arg_params.add_argument("--load", type=bool, default=True)
-arg_params.add_argument("--tag", type=str, default="static_down_sampling")
-arg_params.add_argument("--save_every_n_epochs", type=int, default=10)
-
 if __name__ == '__main__':
+
+    # For saving and loading customization edit these parameters
+    arg_params = argparse.ArgumentParser()
+    arg_params.add_argument("--load", type=bool, default=True)
+    arg_params.add_argument("--tag", type=str, default="static_down_sampling")
+    arg_params.add_argument("--save_every_n_epochs", type=int, default=10)
 
     args = arg_params.parse_args()
     model_tag = args.tag
@@ -187,7 +187,9 @@ if __name__ == '__main__':
     elif model_tag not in save_files_list:
         os.mkdir(save_dir)
 
+    # For model params edit this part
     params = dict()
+
     # Model parameters
     params["lstm_hidden"] = 64
     params["output_size"] = 1
@@ -197,11 +199,13 @@ if __name__ == '__main__':
     params["num_epochs"] = 40
 
     # Data preparation parameters
-    params["stride"] = 100
+    params["sampling_method"] = "static"
+    params["sampling_rate"] = 1000
     params["total_seq_len"] = 50
     params["observed_sequence_len"] = 30
-    params["seq_stride"] = 1
-    params["sampling_rate"] = 1000
+    params["seq_stride"] = 100
+    params["shuffle"] = True
+    params["train_split"] = 0.8
 
     train_evaluate(
         args,
