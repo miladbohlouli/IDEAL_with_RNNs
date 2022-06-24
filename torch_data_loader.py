@@ -1,4 +1,4 @@
-import os
+import logging
 
 import torch
 import numpy as np
@@ -9,6 +9,7 @@ from dataset.IdealMetadataInterface import *
 import os
 
 line = 20*"*"
+
 
 class IDEAL_RNN(Dataset):
     def __init__(self,
@@ -126,7 +127,6 @@ class IDEAL_RNN(Dataset):
             seq_len=seq_length,
             stride=stride
         )
-
 
     def rescale(self, data):
         return (data * self.room_mean_std[1]) + self.room_mean_std[0]
