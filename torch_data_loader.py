@@ -14,23 +14,22 @@ line = 20*"*"
 class IDEAL_RNN(Dataset):
     def __init__(self,
                  data_path="dataset",
-                 seed=20,
-                 sampling_rate=40,
                  multi_room_training=True,
-                 seq_length=30,
-                 shuffle=True,
                  train=True,
-                 train_split=0.8,
-                 stride=100):
+                 seed=20,
+                 params=None):
+        assert params is not None
         sensor_data_path = os.path.join(data_path, "sensordata")
         room_appliance_data_path = os.path.join(data_path, "room_and_appliance_sensors")
         metadata_path = os.path.join(data_path, "metadata")
 
-        self.seq_length = seq_length
-        self.stride = stride
-        self.train_split = train_split
+        self.sampling_method = params["sampling_method"]
+        self.seq_length = params["total_seq_len"]
+        self.sampling_rate = params["sampling_rate"]
+        self.stride = params["seq_stride"]
+        self.train_split = params["train_split"]
+        shuffle = params["shuffle"]
         self.train = train
-        self.sampling_rate = sampling_rate
 
         # initialize the metadata interface
         mdi = IdealMetadataInterface(metadata_path)
@@ -100,14 +99,14 @@ class IDEAL_RNN(Dataset):
 
         self.train_dataset = IDEAL_RNN.__make_sequence(
             train_dataset,
-            seq_len=seq_length,
-            stride=stride
+            seq_len=self.seq_length,
+            stride=self.stride
         )
 
         self.train_dates = IDEAL_RNN.__make_sequence(
             train_dates,
-            seq_len=seq_length,
-            stride=stride
+            seq_len=self.seq_length,
+            stride=self.stride
         )
 
         if shuffle:
@@ -118,14 +117,14 @@ class IDEAL_RNN(Dataset):
 
         self.test_dataset = IDEAL_RNN.__make_sequence(
             test_dataset,
-            seq_len=seq_length,
-            stride=stride
+            seq_len=self.seq_length,
+            stride=self.stride
         )
 
         self.test_dates = IDEAL_RNN.__make_sequence(
             test_dates,
-            seq_len=seq_length,
-            stride=stride
+            seq_len=self.seq_length,
+            stride=self.stride
         )
 
     def rescale(self, data):
