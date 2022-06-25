@@ -17,7 +17,8 @@ class IDEAL_RNN(Dataset):
                  multi_room_training=True,
                  train=True,
                  seed=20,
-                 params=None):
+                 params=None,
+                 logger=None):
         assert params is not None
         sensor_data_path = os.path.join(data_path, "sensordata")
         room_appliance_data_path = os.path.join(data_path, "room_and_appliance_sensors")
@@ -41,11 +42,11 @@ class IDEAL_RNN(Dataset):
         room_ids = mdi.metadata["rooms"][mdi.metadata["rooms"]["homeid"] == home_id]["roomid"].to_numpy()
         home_sensors = mdi.metadata["sensors"][mdi.metadata["sensors"]["roomid"].isin(room_ids)]
         chosen_sensors = ["temperature"]
-        print("home_id: ", home_id)
-        print("room_ids: ", room_ids)
-        print("available sensor types: ", home_sensors["type"].unique())
-        print("chosen sensor types: ", chosen_sensors)
-        print(line)
+        logger.info(f"home_id: {home_id}")
+        logger.info(f"room_ids: {room_ids}")
+        logger.info(f"available sensor types: {home_sensors['type'].unique()}", )
+        logger.info(f"chosen sensor types: {chosen_sensors}")
+        logger.info(line)
 
         rnn_dataset_metdata = home_sensors.loc[home_sensors["type"].isin(chosen_sensors), ["roomid", "sensorid", "type"]].sort_values("roomid")
 

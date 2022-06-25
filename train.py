@@ -16,7 +16,7 @@ import os
 import shutil
 import pickle as pk
 import argparse
-
+from ray import tune
 
 
 global line
@@ -24,50 +24,56 @@ line = 20*"*"
 
 
 def train_evaluate(
+        config,
+        checkpoint_dir,
+        data_dir,
+        logging_dir,
         args,
-        params,
-        temp_dir,
-        save_dir
+        tuning_mode=False,
     ):
-    assert params["observed_sequence_len"] < params["total_seq_len"]
+    assert config["observed_sequence_len"] < config["total_seq_len"]
 
-    train_writer = SummaryWriter(os.path.join(temp_dir, "train"))
-    test_writer = SummaryWriter(os.path.join(temp_dir, "test"))
-    logging.basicConfig(filename=os.path.join(save_dir, "running.log"),
-                                              format='%(asctime)s %(filename)s %(levelname)s: %(message)s',
-                                              level=logging.INFO)
+    train_writer = SummaryWriter(os.path.join(os.path.join(logging_dir, "tensorboard"), "train"))
+    test_writer = SummaryWriter(os.path.join(os.path.join(logging_dir, "tensorboard"), "test"))
+    logging.basicConfig(filename=os.path.join(logging_dir, "running.log"),
+                        format='%(asctime)s %(filename)s %(levelname)s: %(message)s',
+                        level=logging.INFO)
 
     logging.info("Preparing the train loaders...")
     train_dataset = IDEAL_RNN(
+        data_path=data_dir,
         multi_room_training=True,
-        params=params
+        logger=logging,
+        params=config
     )
 
     train_loader = DataLoader(
         train_dataset,
         collate_fn=custom_collate,
-        batch_size=params["batch_size"]
+        batch_size=config["batch_size"]
     )
 
     logging.info("Preparing the test loaders...")
     test_dataset = IDEAL_RNN(
+        data_path=data_dir,
         multi_room_training=True,
+        logger=logging,
         train=False,
-        params=params
+        params=config
     )
 
     test_loader = DataLoader(
         test_dataset,
         collate_fn=custom_collate,
-        batch_size=params["batch_size"]
+        batch_size=config["batch_size"]
     )
 
-    params["input_size"] = train_dataset[0][0].shape[-1]
+    config["input_size"] = train_dataset[0][0].shape[-1]
 
     model = Encoder(
-        hidden_dim=params["lstm_hidden"],
-        input_size=params["input_size"],
-        output_size=params["output_size"]
+        hidden_dim=config["lstm_hidden"],
+        input_size=config["input_size"],
+        output_size=config["output_size"]
     ).float()
 
     logging.info(f"Experimenting with {len(train_dataset)} train | {len(test_dataset)} samples")
@@ -80,40 +86,27 @@ def train_evaluate(
     start_epoch = 0
     model_saving_dict = {}
 
-    if args.load:
-        with open(os.path.join(save_dir, "run_params.pickle"), "rb") as file:
-            params = pk.load(file)
+    if checkpoint_dir:
+        with open(os.path.join(logging_dir, "run_params.pickle"), "rb") as file:
+            config = pk.load(file)
 
-        try:
-            saved_models_list = [file for file in os.listdir(save_dir) if "checkpoint" in file]
-            if len(saved_models_list) == 0:
-                logging.info("There are no saved models")
-            else:
-                model_saving_dict = torch.load(os.path.join(save_dir, sorted(saved_models_list)[-1]))
-                logging.info(f"Loading the model from checkpoint {sorted(saved_models_list)[:-1]}")
-                start_epoch = model_saving_dict["epoch"] + 1
-                optimizer.load_state_dict(model_saving_dict["optimizer_state_dict"])
-                model.load_state_dict(model_saving_dict["model_state_dict"])
-                step = model_saving_dict["step"]
+        model_saving_dict = torch.load(os.path.join(checkpoint_dir, "checkpoint"))
+        logging.info(f"Loading the model from checkpoint {os.path.join(checkpoint_dir, 'checkpoint')}")
+        start_epoch = model_saving_dict["epoch"] + 1
+        optimizer.load_state_dict(model_saving_dict["optimizer_state_dict"])
+        model.load_state_dict(model_saving_dict["model_state_dict"])
+        step = model_saving_dict["step"]
 
-        except:
-            raise "There was a problem loading the model"
-
-    else:
-        # saving the parameters
-        with open(os.path.join(save_dir, "run_params.pickle"), "wb") as file:
-            pk.dump(params, file)
-
-    for i in tqdm(range(start_epoch, start_epoch + params["num_epochs"])):
+    for i in range(start_epoch, start_epoch + config["num_epochs"]):
         model.train()
         train_losses = []
         test_losses = []
         for (sequences, dates) in train_loader:
             sequences = sequences.float()
             results = model(
-                sequences[:, :params["observed_sequence_len"], :],
-                prediction_time_steps = (params["total_seq_len"] - params["observed_sequence_len"]))
-            mse_error = loss(results, sequences[:, params["observed_sequence_len"]:])
+                sequences[:, :config["observed_sequence_len"], :],
+                prediction_time_steps = (config["total_seq_len"] - config["observed_sequence_len"]))
+            mse_error = loss(results, sequences[:, config["observed_sequence_len"]:])
 
             optimizer.zero_grad()
             mse_error.backward()
@@ -127,17 +120,17 @@ def train_evaluate(
         for (sequences, dates) in test_loader:
             sequences = sequences.float()
             results = model(
-                sequences[:, :params["observed_sequence_len"], :],
-                prediction_time_steps=(params["total_seq_len"] - params["observed_sequence_len"]))
-            mse_error = loss(results, sequences[:, params["observed_sequence_len"]:])
+                sequences[:, :config["observed_sequence_len"], :],
+                prediction_time_steps=(config["total_seq_len"] - config["observed_sequence_len"]))
+            mse_error = loss(results, sequences[:, config["observed_sequence_len"]:])
 
             test_losses.append(mse_error.detach().numpy())
 
         # Visualizing the results for train step
-        logging.info(f"Epoch ({i+1:3}/{start_epoch + params['num_epochs']:3} | train_mse: {np.mean(train_losses):2.5f} | test_mse: {np.mean(test_losses):2.5f})")
-
+        logging.info(f"Epoch ({i+1:3}/{start_epoch + config['num_epochs']:3} | train_mse: {np.mean(train_losses):2.5f} | test_mse: {np.mean(test_losses):2.5f})")
         test_writer.add_scalar("MSE", np.mean(train_losses), step)
-
+        if tuning_mode:
+            tune.report(loss=np.mean(test_losses))
         selected = np.random.randint(0, dates.shape[0])
         fig = visulaize(dates[selected],
                   target=test_dataset.rescale(sequences[selected].detach().numpy()),
@@ -148,7 +141,6 @@ def train_evaluate(
 
         # saving the model
         if i % args.save_every_n_epochs == 0:
-            logging.info(f"Saving the model as {args.tag + '-checkpoint-'+ str(i)}")
             model_saving_dict["epoch"] = i
             model_saving_dict["model_state_dict"] = model.state_dict()
             model_saving_dict["optimizer_state_dict"] = optimizer.state_dict()
@@ -156,31 +148,26 @@ def train_evaluate(
             model_saving_dict["train_loss"] = np.mean(train_losses)
             model_saving_dict["test_loss"] = np.mean(test_losses)
 
-            torch.save(model_saving_dict, os.path.join(save_dir, args.tag + "-checkpoint-" + str(i)))
+            if tuning_mode:
+                with tune.checkpoint_dir(step) as checkpoint_dir:
+                    path = os.path.join(checkpoint_dir, "checkpoint")
+                    torch.save(model_saving_dict, path)
+
 
 
 if __name__ == '__main__':
 
     # For saving and loading customization edit these parameters
     arg_params = argparse.ArgumentParser()
-    arg_params.add_argument("--load", type=bool, default=True)
-    arg_params.add_argument("--tag", type=str, default="static_down_sampling")
-    arg_params.add_argument("--save_every_n_epochs", type=int, default=10)
+    arg_params.add_argument("--load", type=bool, default=False)
+    arg_params.add_argument("--tag", type=str, default="static_down_sampling_64")
+    arg_params.add_argument("--save_every_n_epochs", type=int, default=3)
 
     args = arg_params.parse_args()
     model_tag = args.tag
 
-    temp_files_list = os.listdir("temp")
-    temp_dir = os.path.join("temp", model_tag)
-
     save_files_list = os.listdir("save")
     save_dir = os.path.join("save", model_tag)
-
-    if model_tag in temp_files_list and not args.load:
-        shutil.rmtree(temp_dir)
-        os.mkdir(temp_dir)
-    elif model_tag not in temp_files_list:
-        os.mkdir(temp_dir)
 
     if model_tag in save_files_list and not args.load:
         shutil.rmtree(save_dir)
@@ -191,12 +178,12 @@ if __name__ == '__main__':
     params = dict()
 
     # Model parameters
-    params["lstm_hidden"] = 64
-    params["output_size"] = 1
+    params["lstm_hidden"] = tune.choice([64, 128, 256, 512])
+    params["output_size"] = 3
 
     # Running Parameters
-    params["batch_size"] = 64
-    params["num_epochs"] = 40
+    params["batch_size"] = tune.choice([32, 64])
+    params["num_epochs"] = 100
 
     # Data preparation parameters
     params["sampling_method"] = "static"
@@ -210,7 +197,6 @@ if __name__ == '__main__':
     train_evaluate(
         args,
         params,
-        temp_dir,
-        save_dir
+        checkpoint_dir=save_dir
     )
 
