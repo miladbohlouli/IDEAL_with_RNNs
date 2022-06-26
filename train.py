@@ -110,7 +110,8 @@ def train_evaluate(
         train_losses = []
         test_losses = []
         for (sequences, dates) in train_loader:
-            sequences = sequences.float().to(device)
+            sequences = sequences.float()
+            sequences = sequences.to(device)
             results = model(
                 sequences[:, :config["observed_sequence_len"], :],
                 prediction_time_steps = (config["total_seq_len"] - config["observed_sequence_len"]))
@@ -126,7 +127,8 @@ def train_evaluate(
 
         model.eval()
         for (sequences, dates) in test_loader:
-            sequences = sequences.float().to(device)
+            sequences = sequences.float()
+            sequences = sequences.to(device)
             results = model(
                 sequences[:, :config["observed_sequence_len"], :],
                 prediction_time_steps=(config["total_seq_len"] - config["observed_sequence_len"]))
