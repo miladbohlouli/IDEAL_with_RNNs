@@ -1,5 +1,8 @@
 import logging
 from functools import partial
+
+import torch.cuda
+
 from train import train_evaluate
 import argparse
 import shutil
@@ -61,11 +64,12 @@ def parameter_search(num_samples, max_epochs):
         grace_period=1,
         reduction_factor=2
     )
+    gpu_per_trial = 1 if torch.cuda.is_available() else 0
     results = tune.run(
         partial(train_evaluate, data_dir=data_dir, args=args, tuning_mode=True, logging_dir="."),
         config=params,
         scheduler=scheduler,
-        resources_per_trial={"cpu" : 8},
+        resources_per_trial={"cpu" : 8, "gpu" : gpu_per_trial},
         metric="loss",
         progress_reporter=reporter,
         local_dir=save_dir,

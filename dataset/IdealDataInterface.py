@@ -59,7 +59,7 @@ class IdealDataInterface(object):
         df = pd.DataFrame(data, columns=columns, dtype=str)
         df.set_index(['homeid', 'roomid', 'room_type', 'category', 'subtype', 'sensorid'], inplace=True)
 
-        # print('Found entries for {} sensor readings.'.format(df.shape[0]))
+        print('Found entries for {} sensor readings.'.format(df.shape[0]))
 
         return df
 
