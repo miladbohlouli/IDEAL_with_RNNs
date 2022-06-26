@@ -10,6 +10,7 @@ import os
 
 line = 20*"*"
 
+# Todo
 
 class IDEAL_RNN(Dataset):
     def __init__(self,
@@ -143,10 +144,21 @@ class IDEAL_RNN(Dataset):
         elif not self.train:
             return len(self.test_dataset)
 
-    def __sample(self, data):
+    def __sample(self,
+                 data,
+                 sampling_method,
+                 sampling_rate,
+                 entropy_rate
+                 ):
+        # Todo
+        #   1. other sampling methods to be implemented
         data_len = len(data)
+        if sampling_method == "static":
+            assert sampling_rate is not None
+        elif sampling_method == "entropy":
+            assert entropy_rate is not None
         indexes = np.array(list(range(data_len)))
-        return data[indexes % 10 == 0]
+        return data[indexes % sampling_rate == 0]
 
 
 
