@@ -81,8 +81,9 @@ def train_evaluate(
     model = Encoder(
         hidden_dim=config["lstm_hidden"],
         input_size=config["input_size"],
-        output_size=config["output_size"]
-    ).float().to(device)
+        output_size=config["output_size"],
+        device=device 
+    ).float()
 
     logging.info(f"Experimenting with {len(train_dataset)} train | {len(test_dataset)} samples")
     logging.info(model)
@@ -105,6 +106,7 @@ def train_evaluate(
         model.load_state_dict(model_saving_dict["model_state_dict"])
         step = model_saving_dict["step"]
 
+    model = model.to(device)
     for i in range(start_epoch, start_epoch + config["num_epochs"]):
         model.train()
         train_losses = []
@@ -114,7 +116,8 @@ def train_evaluate(
             sequences = sequences.to(device)
             results = model(
                 sequences[:, :config["observed_sequence_len"], :],
-                prediction_time_steps = (config["total_seq_len"] - config["observed_sequence_len"]))
+                prediction_time_steps = (config["total_seq_len"] - config["observed_sequence_len"])).cpu()
+            sequences = sequences.cpu()
             mse_error = loss(results, sequences[:, config["observed_sequence_len"]:])
 
             optimizer.zero_grad()
@@ -131,11 +134,13 @@ def train_evaluate(
             sequences = sequences.to(device)
             results = model(
                 sequences[:, :config["observed_sequence_len"], :],
-                prediction_time_steps=(config["total_seq_len"] - config["observed_sequence_len"]))
+                prediction_time_steps=(config["total_seq_len"] - config["observed_sequence_len"])).cpu()
+            sequences = sequences.cpu()
             mse_error = loss(results, sequences[:, config["observed_sequence_len"]:])
 
             test_losses.append(mse_error.detach().numpy())
 
+        
         # Visualizing the results for train step
         logging.info(f"Epoch ({i+1:3}/{start_epoch + config['num_epochs']:3} | train_mse: {np.mean(train_losses):2.5f} | test_mse: {np.mean(test_losses):2.5f})")
         test_writer.add_scalar("MSE", np.mean(train_losses), step)

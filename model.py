@@ -3,15 +3,16 @@ import torch
 import numpy as np
 
 class Encoder(Module):
-    def __init__(self, hidden_dim, input_size, output_size):
+    def __init__(self, hidden_dim, input_size, output_size, device):
         super(Encoder, self).__init__()
         self.hidden_dim = hidden_dim
         self.decoder = LSTM(input_size, hidden_dim, batch_first=True)
         self.hidden2temp = Linear(hidden_dim, output_size)
+        self.device = device
 
     def init_hidden(self, batch_size):
-        h0 = torch.zeros(1, batch_size, self.hidden_dim)
-        c0 = torch.zeros(1, batch_size, self.hidden_dim)
+        h0 = torch.zeros(1, batch_size, self.hidden_dim, device=self.device)
+        c0 = torch.zeros(1, batch_size, self.hidden_dim, device=self.device)
         return h0, c0
 
     def forward(self, data, prediction_time_steps):
