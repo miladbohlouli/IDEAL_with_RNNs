@@ -8,6 +8,7 @@ dataset/metadata
 dataset/DS*
 dataset/sensordata
 dataset/room*
+dataset/zip_files
 temp
 save
 .DS_*
