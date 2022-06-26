@@ -33,6 +33,14 @@ def train_evaluate(
     ):
     assert config["observed_sequence_len"] < config["total_seq_len"]
 
+    if torch.cuda.is_available():
+        dev = "cuda:0"
+    else:
+        dev = "cpu"
+
+    device = torch.device(dev)
+    logging.info(f"Using the {dev} as the running device")
+
     train_writer = SummaryWriter(os.path.join(os.path.join(logging_dir, "tensorboard"), "train"))
     test_writer = SummaryWriter(os.path.join(os.path.join(logging_dir, "tensorboard"), "test"))
     logging.basicConfig(filename=os.path.join(logging_dir, "running.log"),
@@ -74,7 +82,7 @@ def train_evaluate(
         hidden_dim=config["lstm_hidden"],
         input_size=config["input_size"],
         output_size=config["output_size"]
-    ).float()
+    ).float().to(device)
 
     logging.info(f"Experimenting with {len(train_dataset)} train | {len(test_dataset)} samples")
     logging.info(model)
@@ -102,7 +110,7 @@ def train_evaluate(
         train_losses = []
         test_losses = []
         for (sequences, dates) in train_loader:
-            sequences = sequences.float()
+            sequences = sequences.float().to(device)
             results = model(
                 sequences[:, :config["observed_sequence_len"], :],
                 prediction_time_steps = (config["total_seq_len"] - config["observed_sequence_len"]))
@@ -118,7 +126,7 @@ def train_evaluate(
 
         model.eval()
         for (sequences, dates) in test_loader:
-            sequences = sequences.float()
+            sequences = sequences.float().to(device)
             results = model(
                 sequences[:, :config["observed_sequence_len"], :],
                 prediction_time_steps=(config["total_seq_len"] - config["observed_sequence_len"]))
