@@ -17,6 +17,7 @@ import shutil
 import pickle as pk
 import argparse
 from ray import tune
+import logging
 
 
 global line
@@ -39,19 +40,23 @@ def train_evaluate(
         dev = "cpu"
 
     device = torch.device(dev)
-    logging.info(f"Using the {dev} as the running device")
 
     train_writer = SummaryWriter(os.path.join(os.path.join(logging_dir, "tensorboard"), "train"))
     test_writer = SummaryWriter(os.path.join(os.path.join(logging_dir, "tensorboard"), "test"))
-    logging.basicConfig(filename=os.path.join(logging_dir, "running.log"),
-                        format='%(asctime)s %(filename)s %(levelname)s: %(message)s',
-                        level=logging.INFO)
+    logger = logging.getLogger("runtime_logs")
+    formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
+    hdlr1 = logging.FileHandler(os.path.join(logging_dir, "runtime.log"))
+    hdlr1.setFormatter(formatter)
+    logger.setLevel(logging.INFO)
+    logger.addHandler(hdlr1)
 
-    logging.info("Preparing the train loaders...")
+    logger.info(f"Using the {dev} as the running device")
+
+    logger.info("Preparing the train loaders...")
     train_dataset = IDEAL_RNN(
         data_path=data_dir,
         multi_room_training=True,
-        logger=logging,
+        logger=logger,
         params=config
     )
 
@@ -61,11 +66,11 @@ def train_evaluate(
         batch_size=config["batch_size"]
     )
 
-    logging.info("Preparing the test loaders...")
+    logger.info("Preparing the test loaders...")
     test_dataset = IDEAL_RNN(
         data_path=data_dir,
         multi_room_training=True,
-        logger=logging,
+        logger=logger,
         train=False,
         params=config
     )
@@ -85,9 +90,9 @@ def train_evaluate(
         device=device 
     ).float()
 
-    logging.info(f"Experimenting with {len(train_dataset)} train | {len(test_dataset)} samples")
-    logging.info(model)
-    logging.info(line)
+    logger.info(f"Experimenting with {len(train_dataset)} train | {len(test_dataset)} samples")
+    logger.info(model)
+    logger.info(line)
 
     loss = MSELoss()
     optimizer = Adam(model.parameters())
@@ -95,12 +100,15 @@ def train_evaluate(
     start_epoch = 0
     model_saving_dict = {}
 
-    if checkpoint_dir:
+    if args.load:
         with open(os.path.join(logging_dir, "run_params.pickle"), "rb") as file:
             config = pk.load(file)
 
-        model_saving_dict = torch.load(os.path.join(checkpoint_dir, "checkpoint"))
-        logging.info(f"Loading the model from checkpoint {os.path.join(checkpoint_dir, 'checkpoint')}")
+        checkpoint_dir = sorted(x for x in os.listdir(logging_dir) if "checkpoint" in x)
+        print("found the checkpoint", os.path.join(logging_dir, checkpoint_dir[-1]))
+
+        model_saving_dict = torch.load(os.path.join(logging_dir, checkpoint_dir[-1]))
+        logger.info(f"Loading the model from checkpoint {os.path.join(checkpoint_dir, 'checkpoint')}")
         start_epoch = model_saving_dict["epoch"] + 1
         optimizer.load_state_dict(model_saving_dict["optimizer_state_dict"])
         model.load_state_dict(model_saving_dict["model_state_dict"])
@@ -142,7 +150,7 @@ def train_evaluate(
 
         
         # Visualizing the results for train step
-        logging.info(f"Epoch ({i+1:3}/{start_epoch + config['num_epochs']:3} | train_mse: {np.mean(train_losses):2.5f} | test_mse: {np.mean(test_losses):2.5f})")
+        logger.info(f"Epoch ({i+1:3}/{start_epoch + config['num_epochs']:3} | train_mse: {np.mean(train_losses):2.5f} | test_mse: {np.mean(test_losses):2.5f})")
         test_writer.add_scalar("MSE", np.mean(train_losses), step)
         if tuning_mode:
             tune.report(loss=np.mean(test_losses))
@@ -168,6 +176,10 @@ def train_evaluate(
                     path = os.path.join(checkpoint_dir, "checkpoint")
                     torch.save(model_saving_dict, path)
 
+            else:
+                path = os.path.join(logging_dir, f"-checkpoint{i}.pk")
+                torch.save(model_saving_dict, path)
+
 
 
 if __name__ == '__main__':
@@ -189,29 +201,33 @@ if __name__ == '__main__':
     elif model_tag not in save_files_list:
         os.mkdir(save_dir)
 
+    data_dir = os.path.abspath("dataset")
+
     # For model params edit this part
     params = dict()
 
     # Model parameters
-    params["lstm_hidden"] = tune.choice([64, 128, 256, 512])
-    params["output_size"] = 3
+    params["lstm_hidden"] = 128
+    params["output_size"] = 1
 
     # Running Parameters
-    params["batch_size"] = tune.choice([32, 64])
+    params["batch_size"] = 64
     params["num_epochs"] = 100
 
     # Data preparation parameters
     params["sampling_method"] = "static"
     params["sampling_rate"] = 1000
-    params["total_seq_len"] = 50
-    params["observed_sequence_len"] = 30
+    params["total_seq_len"] = 70
+    params["observed_sequence_len"] = 40
     params["seq_stride"] = 100
     params["shuffle"] = True
     params["train_split"] = 0.8
 
     train_evaluate(
-        args,
-        params,
-        checkpoint_dir=save_dir
+        args=args,
+        config=params,
+        checkpoint_dir=None,
+        logging_dir=save_dir,
+        data_dir=data_dir
     )
 
