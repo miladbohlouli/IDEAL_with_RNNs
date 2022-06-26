@@ -34,22 +34,22 @@ def parameter_search(num_samples, max_epochs):
     params = dict()
 
     # Model parameters
-    # params["lstm_hidden"] = tune.choice([64, 128, 256, 512])
-    params["lstm_hidden"] = 64
+    params["lstm_hidden"] = tune.choice([64, 128, 256, 512])
+    # params["lstm_hidden"] = 64
     params["output_size"] = 1
 
     # Running Parameters
-    # params["batch_size"] = tune.choice([32, 64])
-    params["batch_size"] = 32
+    params["batch_size"] = tune.choice([32, 64])
+    # params["batch_size"] = 32
     params["num_epochs"] = 10
 
     # Data preparation parameters
     params["sampling_method"] = "static"
-    # params["sampling_rate"] = tune.choice([1000, 1500, 5000])
-    params["sampling_rate"] = 1000
+    params["sampling_rate"] = tune.choice([1000, 1500, 5000])
+    # params["sampling_rate"] = 1000
     params["total_seq_len"] = 60
-    # params["observed_sequence_len"] = tune.choice([30, 40, 50])
-    params["observed_sequence_len"] = 30
+    params["observed_sequence_len"] = tune.choice([30, 40, 50])
+    # params["observed_sequence_len"] = 30
     params["seq_stride"] = 100
     params["shuffle"] = True
     params["train_split"] = 0.8

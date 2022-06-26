@@ -4,11 +4,15 @@
 __pycache__/
 *.py[cod]
 *$py.class
-dataset
+dataset/metadata
+dataset/DS*
+dataset/sensordata
+dataset/room*
 temp
 save
 .DS_*
 Daily_charts*
+
 
 # C extensions
 *.so
