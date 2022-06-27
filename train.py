@@ -30,7 +30,8 @@ def train_evaluate(
         data_dir,
         logging_dir,
         args,
-        tuning_mode=False,
+        tuning_mode=False
+
     ):
     assert config["observed_sequence_len"] < config["total_seq_len"]
 
@@ -49,16 +50,27 @@ def train_evaluate(
     hdlr1.setFormatter(formatter)
     logger.setLevel(logging.INFO)
     logger.addHandler(hdlr1)
+    hdlr2 = logging.StreamHandler()
+    hdlr2.setFormatter(formatter)
+    logger.addHandler(hdlr2)
 
     logger.info(f"Using the {dev} as the running device")
 
-    logger.info("Preparing the train loaders...")
-    train_dataset = IDEAL_RNN(
-        data_path=data_dir,
-        multi_room_training=True,
-        logger=logger,
-        params=config
-    )
+    if params["load_data"] and "preprocessed_train.pk" in os.listdir(data_dir):
+        logger.info("Found the preprocessed train data, loading....")
+        with open(os.path.join(data_dir, "preprocessed_train.pk"), "rb") as file:
+            train_dataset = pk.load(file)
+    else:
+        logger.info("Preparing the train loaders...")
+        train_dataset = IDEAL_RNN(
+            data_path=data_dir,
+            single_house=params["single_house"],
+            chosen_sensor=['temperature'],
+            logger=logger,
+            params=config
+        )
+        with open(os.path.join(data_dir, "preprocessed_train.pk"), "wb") as file:
+            pk.dump(train_dataset, file)
 
     train_loader = DataLoader(
         train_dataset,
@@ -66,14 +78,22 @@ def train_evaluate(
         batch_size=config["batch_size"]
     )
 
-    logger.info("Preparing the test loaders...")
-    test_dataset = IDEAL_RNN(
-        data_path=data_dir,
-        multi_room_training=True,
-        logger=logger,
-        train=False,
-        params=config
-    )
+    if params["load_data"] and "preprocessed_test.pk" in os.listdir(data_dir):
+        logger.info("Found the preprocessed test data, loading....")
+        with open(os.path.join(data_dir, "preprocessed_test.pk"), "rb") as file:
+            test_dataset = pk.load(file)
+    else:
+        logger.info("Preparing the test loaders...")
+        test_dataset = IDEAL_RNN(
+            data_path=data_dir,
+            single_house=params["single_house"],
+            logger=logger,
+            chosen_sensor=['temperature'],
+            train=False,
+            params=config
+        )
+        with open(os.path.join(data_dir, "preprocessed_test.pk"), "wb") as file:
+            pk.dump(test_dataset, file)
 
     test_loader = DataLoader(
         test_dataset,
@@ -180,8 +200,6 @@ def train_evaluate(
                 path = os.path.join(logging_dir, f"-checkpoint{i}.pk")
                 torch.save(model_saving_dict, path)
 
-
-
 if __name__ == '__main__':
 
     # For saving and loading customization edit these parameters
@@ -216,18 +234,20 @@ if __name__ == '__main__':
 
     # Data preparation parameters
     params["sampling_method"] = "static"
-    params["sampling_rate"] = 1000
+    params["sampling_rate"] = 20
     params["total_seq_len"] = 70
     params["observed_sequence_len"] = 40
     params["seq_stride"] = 100
     params["shuffle"] = True
     params["train_split"] = 0.8
+    params["single_house"] = False
+    params["load_data"] = False
 
     train_evaluate(
         args=args,
         config=params,
         checkpoint_dir=None,
         logging_dir=save_dir,
-        data_dir=data_dir
+        data_dir=data_dir,
     )
 
