@@ -1,9 +1,5 @@
 import logging
-
-import torch
-import numpy as np
-from matplotlib import pyplot as plt
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from dataset.IdealDataInterface import *
 from dataset.IdealMetadataInterface import *
 import os
@@ -12,7 +8,6 @@ import shutil
 line = 20*"*"
 from tqdm import tqdm
 from functools import partial
-import pickle as pk
 
 # Todo
 #   1. Make a saving and loading for the overall house setting for a faster loading (done)
@@ -22,7 +17,6 @@ import pickle as pk
 class IDEAL_RNN(Dataset):
     def __init__(self,
                  data_path="dataset",
-                 single_house=True,
                  home_id=None,
                  train=True,
                  seed=20,
@@ -33,14 +27,13 @@ class IDEAL_RNN(Dataset):
         self.sensor_data_path = os.path.join(data_path, "sensordata")
         self.room_appliance_data_path = os.path.join(data_path, "room_and_appliance_sensors")
         self.metadata_path = os.path.join(data_path, "metadata")
-        self.sampling_method = params["sampling_method"]
         self.seq_length = params["total_seq_len"]
         self.sampling_rate = params["sampling_rate"]
         self.stride = params["seq_stride"]
         self.train_split = params["train_split"]
         self.shuffle = params["shuffle"]
         self.train = train
-        self.single_house = single_house
+        self.single_house = params["single_house"]
 
         # initialize the metadata interface
         mdi = IdealMetadataInterface(self.metadata_path)
@@ -54,7 +47,7 @@ class IDEAL_RNN(Dataset):
         if self.single_house:
             room_ids = mdi.metadata["rooms"][mdi.metadata["rooms"]["homeid"] == home_id]["roomid"].to_numpy()
             logger.info(f" Considering the home: {home_id} with {len(room_ids)} rooms...")
-        elif not single_house:
+        elif not self.single_house:
             room_ids = []
             for home_id in home_ids:
                 room_ids.append(mdi.metadata["rooms"][mdi.metadata["rooms"]["homeid"] == home_id]["roomid"].to_numpy())
@@ -88,10 +81,8 @@ class IDEAL_RNN(Dataset):
         test_dataset = []
         test_dataset_timesteps = []
         sampling_function = partial(
-            self.__sample,
-            sampling_method=self.sampling_method,
+            self.sample,
             sampling_rate=self.sampling_rate,
-            entropy_rate=None
         )
         for key, value in room_pure_dataset.items():
 
@@ -168,21 +159,11 @@ class IDEAL_RNN(Dataset):
         elif not self.train:
             return len(self.test_dataset)
 
-    def __sample(self,
-                 data,
-                 sampling_method,
-                 sampling_rate,
-                 entropy_rate
-                 ):
-        # Todo
-        #   1. other sampling methods to be implemented
-        data_len = len(data)
-        if sampling_method == "static":
-            assert sampling_rate is not None
-        elif sampling_method == "entropy":
-            assert entropy_rate is not None
-        indexes = np.array(list(range(data_len)))
-        return data[indexes % sampling_rate == 0]
+    def sample(self,
+               data,
+               sampling_rate,
+               ):
+        raise "Not implemented error"
 
     @staticmethod
     def __make_sequence(data, seq_len, stride):
@@ -231,6 +212,7 @@ if __name__ == '__main__':
     params["seq_stride"] = 100
     params["shuffle"] = True
     params["train_split"] = 0.8
+    params["single_house"] = True
 
     logger = logging.getLogger("data_loader_test")
     formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
@@ -241,7 +223,6 @@ if __name__ == '__main__':
 
     train_dataset = IDEAL_RNN(
         data_path=data_dir,
-        single_house=False,
         logger=logger,
         params=params,
         chosen_sensor=["temperature"]
