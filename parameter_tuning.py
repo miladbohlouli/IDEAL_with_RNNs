@@ -58,6 +58,8 @@ def parameter_search(num_samples, max_epochs):
     params["seq_stride"] = 100
     params["shuffle"] = True
     params["train_split"] = 0.8
+    params["single_house"] = False
+    params["load_data"] = False
 
     reporter = CLIReporter(
         "loss"

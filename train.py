@@ -56,7 +56,7 @@ def train_evaluate(
 
     logger.info(f"Using the {dev} as the running device")
 
-    if params["load_data"] and "preprocessed_train.pk" in os.listdir(data_dir):
+    if config["load_data"] and "preprocessed_train.pk" in os.listdir(data_dir):
         logger.info("Found the preprocessed train data, loading....")
         with open(os.path.join(data_dir, "preprocessed_train.pk"), "rb") as file:
             train_dataset = pk.load(file)
@@ -64,7 +64,6 @@ def train_evaluate(
         logger.info("Preparing the train loaders...")
         train_dataset = IDEAL_RNN(
             data_path=data_dir,
-            single_house=params["single_house"],
             chosen_sensor=['temperature'],
             logger=logger,
             params=config
@@ -86,7 +85,6 @@ def train_evaluate(
         logger.info("Preparing the test loaders...")
         test_dataset = IDEAL_RNN(
             data_path=data_dir,
-            single_house=params["single_house"],
             logger=logger,
             chosen_sensor=['temperature'],
             train=False,
