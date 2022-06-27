@@ -74,7 +74,12 @@ class IDEAL_RNN(Dataset):
             dates = [val['readings'].index.to_numpy()[:, None] for val in value]
 
             temp_ds = np.concatenate(temp_ds, axis=1)
-            temp_ds = self.__sample(temp_ds)
+            temp_ds = self.__sample(
+                data=temp_ds,
+                sampling_method=self.sampling_method,
+                sampling_rate=self.sampling_rate,
+                entropy_rate=None
+            )
             dates = np.concatenate(dates, axis=1)
 
             data_len = len(temp_ds)
@@ -159,8 +164,6 @@ class IDEAL_RNN(Dataset):
             assert entropy_rate is not None
         indexes = np.array(list(range(data_len)))
         return data[indexes % sampling_rate == 0]
-
-
 
     @staticmethod
     def __make_sequence(data, seq_len, stride):

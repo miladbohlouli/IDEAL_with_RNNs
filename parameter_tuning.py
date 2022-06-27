@@ -17,6 +17,8 @@ def parameter_search(num_samples, max_epochs):
     # For saving and loading customization edit these parameters
     data_dir = os.path.abspath("dataset")
     arg_params = argparse.ArgumentParser()
+    # Set this to always to False, when parameter tuning
+    arg_params.add_argument("--load", type=bool, default=False)
     arg_params.add_argument("--tag", type=str, default="static_down_sampling")
     arg_params.add_argument("--save_every_n_epochs", type=int, default=10)
 
@@ -48,7 +50,7 @@ def parameter_search(num_samples, max_epochs):
 
     # Data preparation parameters
     params["sampling_method"] = "static"
-    params["sampling_rate"] = tune.choice([1000, 1500, 5000])
+    params["sampling_rate"] = tune.choice(list(range(30, 100, 10)))
     # params["sampling_rate"] = 1000
     params["total_seq_len"] = 60
     params["observed_sequence_len"] = tune.choice([30, 40, 50])
