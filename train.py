@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from torch.nn import MSELoss
 from torch.optim import Adam
 import numpy as np
-from torch_data_loader import IDEAL_RNN
+from data_loader import IDEAL_RNN
 from model import Encoder
 from utils import custom_collate, visulaize, MSE_loss
 from matplotlib import pyplot as plt
